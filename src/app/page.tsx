@@ -1,69 +1,297 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+const TEST_EXAM_ID = "4bb85738-b4ce-4b95-87b7-7aee53631345";
 
 export default function Home() {
+  const supabase = createClient();
+
+  const [email, setEmail] = useState("examspace.test@example.com");
+  const [password, setPassword] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function testStartExam() {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      // ======================================================
+      // 1. Sign in the test student
+      // ======================================================
+
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+      if (authError) {
+        throw new Error(`Login failed: ${authError.message}`);
+      }
+
+      if (!authData.user) {
+        throw new Error("Login succeeded but no user was returned.");
+      }
+
+      // ======================================================
+      // 2. Call start_exam()
+      // ======================================================
+
+      const { data, error: examError } = await supabase.rpc("start_exam", {
+        p_exam_id: TEST_EXAM_ID,
+      });
+
+      if (examError) {
+        throw new Error(`start_exam failed: ${examError.message}`);
+      }
+
+      // ======================================================
+      // 3. Display the result
+      // ======================================================
+
+      setResult(
+        JSON.stringify(
+          {
+            authenticated_user: {
+              id: authData.user.id,
+              email: authData.user.email,
+            },
+            start_exam_result: data,
+          },
+          null,
+          2,
+        ),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "An unexpected error occurred.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function logout() {
+    const { error: logoutError } = await supabase.auth.signOut();
+
+    if (logoutError) {
+      setError(`Logout failed: ${logoutError.message}`);
+      return;
+    }
+
+    setResult(null);
+    setError(null);
+  }
+
+  (async () => {
+    const { data, error } = await supabase.rpc("submit_exam", {
+      p_attempt_id: "e525246f-81be-49db-a921-34428ab3dab6",
+    });
+
+    console.log("second submit data:", data);
+    console.log("second submit error:", error);
+  })();
+  /* 
+//To start new attempt
+(async () => {
+  const { data: startData, error: startError } =
+    await supabase.rpc("start_exam", {
+      p_exam_id: "4bb85738-b4ce-4b95-87b7-7aee53631345",
+    });
+
+  console.log("NEW START DATA:", startData);
+  console.log("NEW START ERROR:", startError);
+})();
+
+
+  (async () => {
+    const { data: changedAnswer, error: changeError } = await supabase.rpc(
+      "save_answer",
+      {
+        p_attempt_id: "2258a16f-a518-4245-b171-8ecfe8f14a55",
+        p_question_id: "24c01c6c-38b0-4f3a-b084-2fa056220d5b",
+        p_question_version_id: "fc12eaf9-d687-45a7-9687-21e459bc4e61",
+        p_selected_option_id: "76a081ca-d69b-4909-8ec7-4fa66ecdcdea",
+      },
+    );
+
+    console.log("changedAnswer:", changedAnswer);
+    console.log("changeError:", changeError);
+  })();
+
+(async () => {
+  const attemptId = "PASTE_NEW_ATTEMPT_ID_HERE";
+
+  const { data: saveData, error: saveError } =
+    await supabase.rpc("save_answer", {
+      p_attempt_id: attemptId,
+      p_question_id: "24c01c6c-38b0-4f3a-b084-2fa056220d5b",
+      p_question_version_id: "fc12eaf9-d687-45a7-9687-21e459bc4e61",
+      p_selected_option_id: "a546a042-91d7-4427-8c75-d467ae3d202d",
+    });
+
+  console.log("Q1 SAVE DATA:", saveData);
+  console.log("Q1 SAVE ERROR:", saveError);
+})(); 
+
+
+
+ (async () => {
+    const { data: answerData, error: answerError } = await supabase.rpc(
+      "save_answer",
+      {
+        p_attempt_id: "b7d3cb6e-707f-475d-bb86-1ca279128097",
+        p_question_id: "24c01c6c-38b0-4f3a-b084-2fa056220d5b",
+        p_question_version_id: "fc12eaf9-d687-45a7-9687-21e459bc4e61",
+        p_selected_option_id: "a546a042-91d7-4427-8c75-d467ae3d202d",
+      },
+    );
+
+    console.log("answerData:", answerData);
+    console.log("answerError:", answerError);
+  })();
+  
+  */
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main
+      style={{
+        maxWidth: "700px",
+        margin: "0 auto",
+        padding: "40px 20px",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
+      <h1>ExamSpace V1 — Database Test</h1>
+
+      <p>
+        Temporary development page for testing Supabase authentication and{" "}
+        <code>start_exam()</code>.
+      </p>
+
+      {/* =====================================================
+          Login/Test Form
+          ===================================================== */}
+
+      <div style={{ marginTop: "30px" }}>
+        <label
+          htmlFor="email"
+          style={{
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+          }}
+        >
+          Email
+        </label>
+
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "10px",
+            marginBottom: "15px",
+            boxSizing: "border-box",
+          }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        <label
+          htmlFor="password"
+          style={{
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+          }}
+        >
+          Password
+        </label>
+
+        <input
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "10px",
+            marginBottom: "15px",
+            boxSizing: "border-box",
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={testStartExam}
+          disabled={loading}
+          style={{
+            padding: "12px 20px",
+            cursor: loading ? "not-allowed" : "pointer",
+            marginRight: "10px",
+          }}
+        >
+          {loading ? "Testing..." : "Login & Start Test Exam"}
+        </button>
+
+        <button
+          type="button"
+          onClick={logout}
+          disabled={loading}
+          style={{
+            padding: "12px 20px",
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          Logout
+        </button>
+      </div>
+
+      {/* =====================================================
+          Error
+          ===================================================== */}
+
+      {error && (
+        <pre
+          style={{
+            marginTop: "30px",
+            padding: "20px",
+            background: "#fee",
+            border: "1px solid #f00",
+            overflowX: "auto",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {error}
+        </pre>
+      )}
+
+      {/* =====================================================
+          Successful Result
+          ===================================================== */}
+
+      {result && (
+        <pre
+          style={{
+            marginTop: "30px",
+            padding: "20px",
+            background: "#efe",
+            border: "1px solid #0a0",
+            overflowX: "auto",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {result}
+        </pre>
+      )}
+    </main>
   );
 }
